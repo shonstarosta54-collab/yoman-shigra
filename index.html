@@ -483,6 +483,7 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
   <div class="tools">
     <button id="exportBtn">גיבוי הנתונים (JSON)</button>
     <label>שחזור מגיבוי<input type="file" id="importFile" accept=".json" hidden></label>
+    <button id="syncBtn">☁️ סנכרון בין מכשירים</button>
     <button id="resetBtn">🔄 איפוס והתחלה מחדש</button>
   </div>
 </div>
@@ -771,8 +772,10 @@ function load(){
   return s;
 }
 function save(){
+  state.updatedAt=Date.now();
   try{localStorage.setItem(KEY,JSON.stringify(state));}
   catch(e){toast('אין מקום לשמירה — מחקו ימים ישנים עם תמונות או גבו ונקו');}
+  queueSync();
 }
 function dayData(d){
   if(!state.days[d]) state.days[d]={journal:'',mood:null,checks:{},meals:[]};
@@ -1465,9 +1468,145 @@ $('importFile').addEventListener('change',e=>{
   r.readAsText(f);
 });
 
+/* ================= cloud sync (GitHub private repo) ================= */
+const SYNC_REPO='shonstarosta54-collab/yoman-data', SYNC_PATH='data.json', SKEY='shigra-sync-v1';
+let sync=null; try{sync=JSON.parse(localStorage.getItem(SKEY));}catch(e){}
+function saveSyncCfg(){if(sync)localStorage.setItem(SKEY,JSON.stringify(sync));else localStorage.removeItem(SKEY);}
+function setSyncStatus(s){
+  const b=$('syncBtn'); if(!b)return;
+  if(!sync){b.textContent='☁️ סנכרון בין מכשירים';return;}
+  b.textContent=s==='...'?'☁️ מסנכרן…':(s==='err'?'☁️ שגיאת סנכרון — לחצו לניסיון חוזר':'☁️ מסונכרן ✓');
+}
+function b64enc(str){
+  const b=new TextEncoder().encode(str); let s='';
+  for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));
+  return btoa(s);
+}
+function gh(path,opt){
+  opt=opt||{};
+  opt.headers=Object.assign({'Authorization':'Bearer '+sync.token,'Accept':'application/vnd.github+json'},opt.headers||{});
+  return fetch('https://api.github.com'+path,opt);
+}
+async function fetchRemote(){
+  const r=await gh('/repos/'+SYNC_REPO+'/contents/'+SYNC_PATH,{headers:{'Accept':'application/vnd.github.raw'}});
+  if(r.status===404)return{data:null,sha:null};
+  if(!r.ok)throw new Error('fetch '+r.status);
+  const data=JSON.parse(await r.text());
+  let sha=null;
+  const t=await gh('/repos/'+SYNC_REPO+'/git/trees/main');
+  if(t.ok){const j=await t.json();const f=(j.tree||[]).find(x=>x.path===SYNC_PATH);if(f)sha=f.sha;}
+  return{data,sha};
+}
+function ensureShape(s){
+  if(!('profile' in s))s.profile=null;
+  if(!Array.isArray(s.weightLog))s.weightLog=[];
+  if(!s.habits)s.habits=[];
+  if(!s.days)s.days={};
+  if(!s.goal)s.goal=2000;
+  return s;
+}
+let syncTimer=null, syncBusy=false, lastPull=0;
+function queueSync(){
+  if(!sync)return;
+  clearTimeout(syncTimer); setSyncStatus('...');
+  syncTimer=setTimeout(()=>pushSync(false),2500);
+}
+async function pushSync(isRetry){
+  if(!sync||syncBusy)return; syncBusy=true;
+  try{
+    const body={message:'sync',content:b64enc(JSON.stringify(state))};
+    if(sync.sha)body.sha=sync.sha;
+    const r=await gh('/repos/'+SYNC_REPO+'/contents/'+SYNC_PATH,{method:'PUT',body:JSON.stringify(body)});
+    if(r.status===409||r.status===422){
+      const rem=await fetchRemote();
+      sync.sha=rem.sha; saveSyncCfg();
+      if(rem.data&&(rem.data.updatedAt||0)>(state.updatedAt||0)){
+        state=ensureShape(rem.data);
+        localStorage.setItem(KEY,JSON.stringify(state));
+        render(); setSyncStatus('ok');
+      }else if(!isRetry){syncBusy=false; return pushSync(true);}
+      else throw 0;
+    }else if(r.ok){
+      const j=await r.json(); sync.sha=j.content.sha; sync.last=Date.now(); saveSyncCfg(); setSyncStatus('ok');
+    }else throw 0;
+  }catch(e){setSyncStatus('err');}
+  syncBusy=false;
+}
+async function pullSync(force){
+  if(!sync||syncBusy)return;
+  if(!force&&Date.now()-lastPull<30000)return;
+  lastPull=Date.now(); syncBusy=true;
+  try{
+    setSyncStatus('...');
+    const rem=await fetchRemote();
+    sync.sha=rem.sha; saveSyncCfg();
+    if(rem.data&&(rem.data.updatedAt||0)>(state.updatedAt||0)){
+      state=ensureShape(rem.data);
+      localStorage.setItem(KEY,JSON.stringify(state));
+      render(); toast('עודכן מהענן ✓');
+      setSyncStatus('ok');
+    }else if((state.updatedAt||0)>((rem.data&&rem.data.updatedAt)||0)){
+      syncBusy=false; return pushSync(false);
+    }else setSyncStatus('ok');
+  }catch(e){setSyncStatus('err');}
+  syncBusy=false;
+}
+function openSyncModal(){
+  const ov=document.createElement('div'); ov.className='overlay';
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  const sh=document.createElement('div'); sh.className='sheet';
+  if(sync){
+    sh.innerHTML='<button class="sheet-close">✕</button><h3>☁️ סנכרון בין מכשירים</h3>'+
+      '<p style="color:var(--muted);line-height:1.7">מחובר ✓ — כל שינוי עולה אוטומטית לענן הפרטי שלך ומגיע לשאר המכשירים.'+
+      (sync.last?'<br>סנכרון אחרון: '+new Date(sync.last).toLocaleString('he-IL'):'')+'</p>'+
+      '<div class="actions"><button class="btn" id="syncNow">סנכרון עכשיו</button><button class="btn ghost" id="syncOff">ניתוק</button></div>';
+  }else{
+    sh.innerHTML='<button class="sheet-close">✕</button><h3>☁️ הגדרת סנכרון</h3>'+
+      '<p style="color:var(--muted);font-size:.92rem;line-height:1.8">הגדרה חד־פעמית של 2 דקות:</p>'+
+      '<p style="font-size:.92rem;line-height:1.8">1. <a href="https://github.com/settings/tokens/new?scopes=repo&description=yoman-sync" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">לחצו כאן לפתיחת דף יצירת המפתח</a> (התחברו ל־GitHub אם תתבקשו)<br>'+
+      '2. בדף שנפתח: ב־<b>Expiration</b> בחרו <b>No expiration</b><br>'+
+      '3. גללו לתחתית ולחצו על הכפתור הירוק <b>Generate token</b><br>'+
+      '4. העתיקו את המפתח שנוצר (מתחיל ב־ghp_) והדביקו כאן:</p>'+
+      '<input type="password" id="syncToken" placeholder="הדביקו כאן את המפתח…" style="width:100%;direction:ltr;margin:10px 0" autocomplete="off">'+
+      '<p style="color:var(--muted);font-size:.78rem">המפתח נשמר רק במכשיר הזה ומשמש רק לסנכרון. מדביקים את אותו מפתח גם במכשיר השני.</p>'+
+      '<div class="actions"><button class="btn" id="syncConnect">התחברות</button><button class="btn ghost" id="syncCancel">ביטול</button></div>';
+  }
+  ov.appendChild(sh); document.body.appendChild(ov);
+  sh.querySelector('.sheet-close').onclick=()=>ov.remove();
+  if(sync){
+    $('syncNow').onclick=()=>{ov.remove();pullSync(true);};
+    $('syncOff').onclick=()=>{sync=null;saveSyncCfg();setSyncStatus();ov.remove();toast('הסנכרון נותק — הנתונים נשארים במכשיר');};
+  }else{
+    $('syncCancel').onclick=()=>ov.remove();
+    $('syncConnect').onclick=async()=>{
+      const tk=$('syncToken').value.trim();
+      if(!tk){toast('הדביקו קודם את המפתח');return;}
+      $('syncConnect').disabled=true; $('syncConnect').textContent='בודק…';
+      sync={token:tk,sha:null,last:null};
+      try{
+        const r=await gh('/repos/'+SYNC_REPO);
+        if(!r.ok)throw 0;
+        saveSyncCfg(); ov.remove(); setSyncStatus('...');
+        toast('מחובר! מסנכרן…'); pullSync(true);
+      }catch(e){
+        sync=null;
+        $('syncConnect').disabled=false; $('syncConnect').textContent='התחברות';
+        toast('המפתח לא תקין או שאין גישה — בדקו שהעתקתם את כולו');
+      }
+    };
+  }
+}
+$('syncBtn').onclick=()=>{
+  if(sync&&$('syncBtn').textContent.includes('שגיאת'))pullSync(true);
+  else openSyncModal();
+};
+window.addEventListener('focus',()=>pullSync(false));
+
 render();
+setSyncStatus('ok');
+pullSync(true);
 /* first visit: offer profile setup */
-if(!state.profile&&Object.keys(state.days).every(k=>{
+if(!state.profile&&!sync&&Object.keys(state.days).every(k=>{
   const d=state.days[k];return !d.meals.length&&!d.journal&&!Object.keys(d.checks).length;
 })){
   setTimeout(openProfileModal,700);

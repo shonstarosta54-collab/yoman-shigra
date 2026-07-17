@@ -1,4 +1,4 @@
-const CACHE = 'yoman-v1';
+const CACHE = 'yoman-v2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -14,6 +14,7 @@ self.addEventListener('activate', e => {
 // network-first so updates arrive, cache fallback so it works offline
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (!e.request.url.startsWith(self.location.origin)) return; // never cache API calls
   e.respondWith(
     fetch(e.request).then(r => {
       const clone = r.clone();
