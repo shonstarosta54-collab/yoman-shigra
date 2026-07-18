@@ -1452,7 +1452,7 @@ $('resetBtn').onclick=()=>{
   const b=$('resetBtn');
   if(b.dataset.arm){
     delete b.dataset.arm; b.classList.remove('confirming'); b.textContent='🔄 איפוס והתחלה מחדש';
-    localStorage.removeItem(KEY); localStorage.removeItem(ONBOARD_KEY);
+    localStorage.removeItem(KEY);
     state=load(); current=todayStr(); progTab='weight'; render();
     toast('הכול אופס — מתחילים דף חדש! ✨');
     showWelcome();
@@ -1621,13 +1621,10 @@ $('syncBtn').onclick=()=>{
 };
 window.addEventListener('focus',()=>pullSync(false));
 
-/* ================= welcome screen ================= */
-const ONBOARD_KEY='shigra-onboarded-v1';
-function isFreshState(){
-  return !state.profile&&Object.keys(state.days).every(k=>{
-    const d=state.days[k];return !d.meals.length&&!d.journal&&!Object.keys(d.checks).length;
-  });
-}
+/* ================= welcome screen =================
+   shown once per app session (sessionStorage): reappears every time the
+   app is fully closed and reopened, not on every reload within one visit */
+const WELCOME_SESSION_KEY='shigra-welcomed-session';
 const WELCOME_ART=`<svg class="welcome-art" viewBox="0 0 260 190" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <defs>
     <linearGradient id="jRing" x1="0" y1="0" x2="1" y2="1">
@@ -1650,13 +1647,13 @@ function showWelcome(){
     '<div class="welcome-sub">מקום אחד לתעד ארוחות, אימונים, הרגלים ואיך עבר היום — ולראות את ההתקדמות שלכם לאורך זמן.</div>'+
     '<div class="welcome-actions"><button class="btn" id="wStart">בואו נתחיל</button></div>';
   ov.appendChild(card); document.body.appendChild(ov);
-  card.querySelector('#wStart').onclick=()=>{localStorage.setItem(ONBOARD_KEY,'1'); ov.remove();};
+  card.querySelector('#wStart').onclick=()=>{sessionStorage.setItem(WELCOME_SESSION_KEY,'1'); ov.remove();};
 }
 
 render();
 setSyncStatus('ok');
 pullSync(true);
-if(!localStorage.getItem(ONBOARD_KEY)&&isFreshState())showWelcome();
+if(!sessionStorage.getItem(WELCOME_SESSION_KEY)){sessionStorage.setItem(WELCOME_SESSION_KEY,'1'); showWelcome();}
 </script>
 
 <script>if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js");</script>
