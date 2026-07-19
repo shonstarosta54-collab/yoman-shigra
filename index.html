@@ -549,6 +549,10 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
       <input type="number" id="wInput" step="0.1" min="30" max="250" placeholder='משקל היום (ק"ג)…'>
       <button class="btn ghost" id="wSave">⚖️ עדכון משקל</button>
     </div>
+    <div class="weight-update" id="calUpdate" style="display:none">
+      <input type="number" id="cInput" step="1" min="1" max="5000" placeholder='קלוריות מהירות להיום…'>
+      <button class="btn ghost" id="cSave">🔥 הוספת קלוריות</button>
+    </div>
   </section>
 
   <div class="tools">
@@ -1218,6 +1222,7 @@ function renderProgress(){
     tabs.appendChild(c);
   });
   $('weightUpdate').style.display=progTab==='weight'?'flex':'none';
+  $('calUpdate').style.display=progTab==='cal'?'flex':'none';
   if(progTab==='weight')renderWeightChart();
   else if(progTab==='cal')renderCalChart();
   else renderJournalHistory();
@@ -1585,6 +1590,16 @@ $('wSave').onclick=()=>{
   toast('המשקל עודכן: '+v+' ק"ג ✓');
 };
 $('wInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('wSave').click();});
+$('cSave').onclick=()=>{
+  const v=Math.round(parseFloat($('cInput').value));
+  if(!(v>=1&&v<=5000)){toast('הזינו כמות קלוריות תקינה');return;}
+  const dd=dayData(current);
+  dd.meals.push({id:Date.now()+''+Math.random().toString(36).slice(2,6),meal:'snack',
+    name:'הוספה מהירה',desc:'קלוריות',kcal:v,photo:null});
+  save(); $('cInput').value=''; render();
+  toast('נוספו '+v.toLocaleString('he-IL')+' קק"ל ✓');
+};
+$('cInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('cSave').click();});
 
 $('resetBtn').onclick=()=>{
   const b=$('resetBtn');
