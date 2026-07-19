@@ -545,7 +545,7 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
     <div class="chips" id="progTabs" style="margin-bottom:10px"></div>
     <div class="prog-chart" id="progChart"></div>
     <div class="goal-line-note" id="progNote"></div>
-    <div class="weight-update">
+    <div class="weight-update" id="weightUpdate">
       <input type="number" id="wInput" step="0.1" min="30" max="250" placeholder='משקל היום (ק"ג)…'>
       <button class="btn ghost" id="wSave">⚖️ עדכון משקל</button>
     </div>
@@ -1217,6 +1217,7 @@ function renderProgress(){
     c.onclick=()=>{progTab=k;renderProgress();};
     tabs.appendChild(c);
   });
+  $('weightUpdate').style.display=progTab==='weight'?'flex':'none';
   if(progTab==='weight')renderWeightChart();
   else if(progTab==='cal')renderCalChart();
   else renderJournalHistory();
