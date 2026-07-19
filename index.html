@@ -531,7 +531,7 @@ button.hchip:hover{background:rgba(255,255,255,.22)}
     <div class="prog-chart" id="progChart"></div>
     <div class="goal-line-note" id="progNote"></div>
     <div class="weight-update" id="weightUpdate">
-      <input type="number" id="wInput" step="0.1" min="30" max="250" placeholder='משקל היום (ק"ג)…'>
+      <input type="number" id="wInput" step="0.1" min="30" max="250" placeholder='משקל ליום שנבחר (ק"ג)…'>
       <button class="btn ghost" id="wSave">⚖️ עדכון משקל</button>
     </div>
     <div class="weight-update" id="calUpdate" style="display:none">
@@ -1194,12 +1194,21 @@ function renderWeightChart(){
   const map=new Map();
   [...state.weightLog].sort((a,b)=>a.d<b.d?-1:1).forEach(e=>map.set(e.d,e.w));
   const pts=[...map.entries()].map(([d,w])=>({d,w}));
-  if(pts.length<2){
-    box.innerHTML='<div class="prog-empty">עדכנו את המשקל לפחות פעמיים (בימים שונים) כדי לראות את הגרף — אפשר כאן למטה 👇</div>';
-    note.textContent=pts.length===1?'נקודה ראשונה נרשמה: '+pts[0].w+' ק"ג ב‑'+heDate(pts[0].d):'';
-    return;
+  if(pts.length===0){
+    box.innerHTML='<div class="prog-empty">עדיין לא רשמת משקל — הזן משקל למטה 👇 כדי להתחיל לעקוב</div>';
+    note.textContent=''; return;
   }
   const W=560,H=190,PL=38,PR=14,PT=14,PB=26;
+  if(pts.length===1){
+    const p=pts[0], cx=W/2, cy=H/2;
+    box.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">'+
+      '<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="var(--accent)" style="filter:drop-shadow(0 0 6px rgba(61,232,176,.6))"/>'+
+      '<text x="'+cx+'" y="'+(cy-14)+'" text-anchor="middle" font-size="15" font-weight="700" fill="var(--ink)">'+p.w+' ק"ג</text>'+
+      '<text x="'+cx+'" y="'+(cy+24)+'" text-anchor="middle" font-size="11" fill="var(--muted)">'+heDate(p.d)+'</text>'+
+      '</svg>';
+    note.textContent='רשום משקל ביום נוסף (אפשר לבחור תאריך למעלה 📅) כדי לראות קו התקדמות';
+    return;
+  }
   const t0=new Date(pts[0].d+'T12:00:00').getTime(), t1=new Date(pts[pts.length-1].d+'T12:00:00').getTime();
   const ws=pts.map(p=>p.w);
   const lo=Math.min(...ws)-0.5, hi=Math.max(...ws)+0.5;
@@ -1516,11 +1525,12 @@ $('newHabit').addEventListener('keydown',e=>{if(e.key==='Enter')$('addHabitBtn')
 $('wSave').onclick=()=>{
   const v=parseFloat($('wInput').value);
   if(!(v>=30&&v<=250)){toast('הזינו משקל תקין (30–250 ק"ג)');return;}
-  state.weightLog=state.weightLog.filter(e=>e.d!==todayStr());
-  state.weightLog.push({d:todayStr(),w:v});
-  if(state.profile){state.profile.weight=v; applyProfileGoal();}
+  const day=current;
+  state.weightLog=state.weightLog.filter(e=>e.d!==day);
+  state.weightLog.push({d:day,w:v});
+  if(state.profile&&day===todayStr()){state.profile.weight=v; applyProfileGoal();}
   save(); $('wInput').value=''; render();
-  toast('המשקל עודכן: '+v+' ק"ג ✓');
+  toast('המשקל נשמר ל‑'+heDate(day)+': '+v+' ק"ג ✓');
 };
 $('wInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('wSave').click();});
 $('cSave').onclick=()=>{
