@@ -325,6 +325,10 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
 .week .bar.today-bar{outline:2px solid var(--accent); outline-offset:2px}
 .week .lbl{font-size:.72rem; color:var(--muted)}
 .week .val{font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums}
+.week.month{gap:3px}
+.week.month .bar{max-width:none}
+.week.month .val{display:none}
+.week.month .lbl{font-size:.6rem; white-space:nowrap}
 .goal-line-note{font-size:.75rem; color:var(--muted); margin-top:8px}
 .routine-week-wrap{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
 .routine-week-wrap.empty{display:none}
@@ -517,7 +521,7 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
     <div id="routineMeter" class="routine-meter"></div>
     <div id="habitsContainer"></div>
     <div class="routine-week-wrap" id="routineWeekWrap">
-      <div class="routine-week-title">📅 ההתקדמות שלי ב‑7 הימים האחרונים</div>
+      <div class="routine-week-title">📅 ההתקדמות שלי ב‑30 הימים האחרונים</div>
       <div class="week" id="routineWeek"></div>
       <div class="goal-line-note" id="routineWeekNote"></div>
     </div>
@@ -535,7 +539,7 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
   </section>
 
   <section class="card">
-    <h2>📊 השבוע האחרון</h2>
+    <h2>📊 החודש האחרון</h2>
     <div class="week" id="weekChart"></div>
     <div class="goal-line-note" id="weekNote"></div>
   </section>
@@ -1122,25 +1126,25 @@ function renderRoutineWeek(){
   const total=state.habits.length;
   if(!total){wrap.className='routine-week-wrap empty'; return;}
   wrap.className='routine-week-wrap';
-  box.innerHTML='';
-  const days=[]; const base=new Date(current+'T12:00:00');
-  for(let i=6;i>=0;i--){const d=new Date(base);d.setDate(d.getDate()-i);days.push(d);}
-  const letters=['א','ב','ג','ד','ה','ו','ש'];
+  box.className='week month'; box.innerHTML='';
+  const N=30, days=[]; const base=new Date(current+'T12:00:00');
+  for(let i=N-1;i>=0;i--){const d=new Date(base);d.setDate(d.getDate()-i);days.push(d);}
   let fullDays=0;
-  days.forEach(d=>{
+  days.forEach((d,i)=>{
     const k=fmt(d), done=habitDoneCount(k), pct=Math.round(done/total*100);
     if(done===total)fullDays++;
     const col=document.createElement('div'); col.className='col';
-    const val=document.createElement('div'); val.className='val'; val.textContent=done?pct+'%':'';
+    const val=document.createElement('div'); val.className='val';
     const bar=document.createElement('div');
     bar.className='bar'+(done===total?' rt-full':(done?' rt-part':''));
     if(k===current)bar.classList.add('today-bar');
     bar.style.height=Math.max(3,Math.round(pct/100*72))+'px';
     bar.title=new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'numeric'}).format(d)+' — '+done+'/'+total+' הרגלים';
-    const lbl=document.createElement('div'); lbl.className='lbl'; lbl.textContent=letters[d.getDay()];
+    const lbl=document.createElement('div'); lbl.className='lbl';
+    lbl.textContent=(i===0||i===N-1||i%7===0)?d.getDate():'';
     col.append(val,bar,lbl); box.appendChild(col);
   });
-  note.textContent='ימים ירוקים = השלמת את כל השגרה · השלמת הכל ב‑'+fullDays+' מתוך 7 הימים';
+  note.textContent='ימים ירוקים = השלמת את כל השגרה · השלמת הכל ב‑'+fullDays+' מתוך 30 הימים';
 }
 
 function renderRoutineMeter(done,total){
@@ -1187,22 +1191,22 @@ function renderJournal(){
 }
 
 function renderWeek(){
-  const box=$('weekChart'); box.innerHTML='';
-  const days=[];
+  const box=$('weekChart'); box.className='week month'; box.innerHTML='';
+  const N=30, days=[];
   const base=new Date(current+'T12:00:00');
-  for(let i=6;i>=0;i--){const d=new Date(base);d.setDate(d.getDate()-i);days.push(d);}
+  for(let i=N-1;i>=0;i--){const d=new Date(base);d.setDate(d.getDate()-i);days.push(d);}
   const vals=days.map(d=>Math.round(dayKcal(fmt(d))));
   const max=Math.max(state.goal,...vals,1);
-  const letters=['א','ב','ג','ד','ה','ו','ש'];
   days.forEach((d,i)=>{
     const col=document.createElement('div'); col.className='col';
     const v=vals[i];
-    const val=document.createElement('div'); val.className='val'; val.textContent=v?v.toLocaleString('he-IL'):'';
+    const val=document.createElement('div'); val.className='val';
     const bar=document.createElement('div'); bar.className='bar'+(v?' filled':'')+(v>state.goal?' over':'');
     if(fmt(d)===current)bar.classList.add('today-bar');
     bar.style.height=Math.max(3,Math.round(v/max*72))+'px';
     bar.title=new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'numeric'}).format(d)+' — '+v+' קק"ל';
-    const lbl=document.createElement('div'); lbl.className='lbl'; lbl.textContent=letters[d.getDay()];
+    const lbl=document.createElement('div'); lbl.className='lbl';
+    lbl.textContent=(i===0||i===N-1||i%7===0)?d.getDate():'';
     col.append(val,bar,lbl); box.appendChild(col);
   });
   $('weekNote').textContent='היעד היומי: '+state.goal.toLocaleString('he-IL')+' קק"ל · עמודה אדומה = חריגה מהיעד';
