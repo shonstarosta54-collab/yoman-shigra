@@ -331,6 +331,18 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
 .prog-chart{direction:ltr}
 .prog-chart svg{width:100%; height:auto; display:block}
 .prog-empty{color:var(--muted); font-size:.88rem; padding:10px 0}
+.jhist{display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; padding:2px}
+.jhist-row{
+  display:block; width:100%; text-align:right; background:var(--card); border:1px solid var(--line);
+  border-radius:12px; padding:10px 12px; color:var(--ink); cursor:pointer;
+}
+.jhist-row:hover{border-color:var(--accent)}
+.jhist-row.cur{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
+.jhist-head{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px}
+.jhist-date{font-size:.78rem; font-weight:700; color:var(--muted)}
+.jhist-mood{font-size:1.1rem; line-height:1}
+.jhist-text{font-size:.9rem; line-height:1.5; white-space:pre-wrap; word-break:break-word}
+.jhist-nomood{color:var(--muted); font-style:italic}
 .weight-update{display:flex; gap:8px; margin-top:12px}
 .weight-update input{flex:1}
 .streak-chip{background:linear-gradient(135deg, rgba(255,138,92,.18), rgba(255,196,107,.1)) !important}
@@ -1125,12 +1137,42 @@ function renderProgress(){
   const st=calcStreaks();
   $('streakHint').textContent='🔥 רצף: '+st.cur+' · שיא: '+st.best;
   const tabs=$('progTabs'); tabs.innerHTML='';
-  [['weight','⚖️ משקל'],['cal','🔥 קלוריות · 30 יום']].forEach(([k,l])=>{
+  [['weight','⚖️ משקל'],['cal','🔥 קלוריות · 30 יום'],['journal','📖 יומן']].forEach(([k,l])=>{
     const c=document.createElement('button'); c.className='chip'+(progTab===k?' sel':''); c.textContent=l;
     c.onclick=()=>{progTab=k;renderProgress();};
     tabs.appendChild(c);
   });
-  if(progTab==='weight')renderWeightChart(); else renderCalChart();
+  if(progTab==='weight')renderWeightChart();
+  else if(progTab==='cal')renderCalChart();
+  else renderJournalHistory();
+}
+
+function renderJournalHistory(){
+  const box=$('progChart'), note=$('progNote');
+  const entries=Object.keys(state.days)
+    .filter(k=>{const d=state.days[k]; return (d.journal&&d.journal.trim())||d.mood!=null;})
+    .sort((a,b)=>a<b?1:-1);
+  if(!entries.length){
+    box.innerHTML='<div class="prog-empty">עדיין לא כתבת ביומן — כל רשומה שתכתוב תופיע כאן כדי לראות את המסע שלך לאורך הזמן</div>';
+    note.textContent=''; return;
+  }
+  let html='<div class="jhist">';
+  entries.forEach(k=>{
+    const d=state.days[k];
+    const mood=d.mood!=null?MOODS[d.mood]:'';
+    const txt=d.journal&&d.journal.trim()?d.journal.trim():'<span class="jhist-nomood">(מצב רוח בלבד)</span>';
+    const isCur=k===current;
+    html+='<button class="jhist-row'+(isCur?' cur':'')+'" data-day="'+k+'">'+
+      '<div class="jhist-head"><span class="jhist-date">'+heDate(k)+'</span>'+
+      (mood?'<span class="jhist-mood">'+mood+'</span>':'')+'</div>'+
+      '<div class="jhist-text">'+txt+'</div></button>';
+  });
+  html+='</div>';
+  box.innerHTML=html;
+  box.querySelectorAll('.jhist-row').forEach(r=>{
+    r.onclick=()=>{current=r.getAttribute('data-day');render();window.scrollTo({top:0,behavior:'smooth'});};
+  });
+  note.textContent=entries.length+' רשומות ביומן · לחצו על רשומה כדי לפתוח את היום שלה';
 }
 
 function renderWeightChart(){
