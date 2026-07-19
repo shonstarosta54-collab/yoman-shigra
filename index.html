@@ -325,10 +325,23 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
 .week .bar.today-bar{outline:2px solid var(--accent); outline-offset:2px}
 .week .lbl{font-size:.72rem; color:var(--muted)}
 .week .val{font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums}
-.week.month{gap:3px}
-.week.month .bar{max-width:none}
-.week.month .val{display:none}
-.week.month .lbl{font-size:.6rem; white-space:nowrap}
+.month-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px}
+.mg-head{text-align:center; font-size:.6rem; font-weight:700; color:var(--muted); padding-bottom:2px}
+.mg-cell{
+  aspect-ratio:1; border-radius:10px; border:1px solid var(--line); background:var(--card);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; overflow:hidden;
+}
+.mg-cell.blank{border:none; background:none}
+.mg-date{font-size:.6rem; color:var(--muted); line-height:1}
+.mg-val{font-size:.72rem; font-weight:700; font-variant-numeric:tabular-nums; line-height:1}
+.mg-cell.empty .mg-val{color:var(--muted); font-weight:400}
+.mg-cell.ok{background:rgba(61,232,176,.14); border-color:rgba(61,232,176,.32)}
+.mg-cell.ok .mg-val{color:var(--accent)}
+.mg-cell.over{background:rgba(255,138,92,.16); border-color:rgba(255,138,92,.36)}
+.mg-cell.over .mg-val{color:var(--warn)}
+.mg-cell.full{background:rgba(61,232,176,.22); border-color:var(--accent)}
+.mg-cell.full .mg-val{color:var(--accent); font-size:.9rem}
+.mg-cell.today{outline:2px solid var(--accent); outline-offset:1px}
 .goal-line-note{font-size:.75rem; color:var(--muted); margin-top:8px}
 .routine-week-wrap{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
 .routine-week-wrap.empty{display:none}
@@ -1126,25 +1139,27 @@ function renderRoutineWeek(){
   const total=state.habits.length;
   if(!total){wrap.className='routine-week-wrap empty'; return;}
   wrap.className='routine-week-wrap';
-  box.className='week month'; box.innerHTML='';
-  const N=30, days=[]; const base=new Date(current+'T12:00:00');
+  box.className='month-grid';
+  const N=30, base=new Date(current+'T12:00:00'), days=[];
   for(let i=N-1;i>=0;i--){const d=new Date(base);d.setDate(d.getDate()-i);days.push(d);}
+  const letters=['א','ב','ג','ד','ה','ו','ש'];
+  let html=letters.map(l=>'<div class="mg-head">'+l+'</div>').join('');
+  const lead=days[0].getDay();
+  for(let i=0;i<lead;i++)html+='<div class="mg-cell blank"></div>';
   let fullDays=0;
-  days.forEach((d,i)=>{
+  days.forEach(d=>{
     const k=fmt(d), done=habitDoneCount(k), pct=Math.round(done/total*100);
     if(done===total)fullDays++;
-    const col=document.createElement('div'); col.className='col';
-    const val=document.createElement('div'); val.className='val';
-    const bar=document.createElement('div');
-    bar.className='bar'+(done===total?' rt-full':(done?' rt-part':''));
-    if(k===current)bar.classList.add('today-bar');
-    bar.style.height=Math.max(3,Math.round(pct/100*72))+'px';
-    bar.title=new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'numeric'}).format(d)+' — '+done+'/'+total+' הרגלים';
-    const lbl=document.createElement('div'); lbl.className='lbl';
-    lbl.textContent=(i===0||i===N-1||i%7===0)?d.getDate():'';
-    col.append(val,bar,lbl); box.appendChild(col);
+    const cls=done===total?'full':(done?'ok':'empty');
+    const today=k===current?' today':'';
+    const t=new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'numeric'}).format(d)+' — '+done+'/'+total+' הרגלים';
+    const label=done===total?'✓':(done?pct+'%':'–');
+    html+='<div class="mg-cell '+cls+today+'" title="'+t+'">'+
+      '<div class="mg-date">'+d.getDate()+'</div>'+
+      '<div class="mg-val">'+label+'</div></div>';
   });
-  note.textContent='ימים ירוקים = השלמת את כל השגרה · השלמת הכל ב‑'+fullDays+' מתוך 30 הימים';
+  box.innerHTML=html;
+  note.textContent='✓ = השלמת את כל השגרה · השלמת הכל ב‑'+fullDays+' מתוך 30 הימים';
 }
 
 function renderRoutineMeter(done,total){
@@ -1191,25 +1206,24 @@ function renderJournal(){
 }
 
 function renderWeek(){
-  const box=$('weekChart'); box.className='week month'; box.innerHTML='';
-  const N=30, days=[];
-  const base=new Date(current+'T12:00:00');
+  const box=$('weekChart'); box.className='month-grid';
+  const N=30, base=new Date(current+'T12:00:00'), days=[];
   for(let i=N-1;i>=0;i--){const d=new Date(base);d.setDate(d.getDate()-i);days.push(d);}
-  const vals=days.map(d=>Math.round(dayKcal(fmt(d))));
-  const max=Math.max(state.goal,...vals,1);
-  days.forEach((d,i)=>{
-    const col=document.createElement('div'); col.className='col';
-    const v=vals[i];
-    const val=document.createElement('div'); val.className='val';
-    const bar=document.createElement('div'); bar.className='bar'+(v?' filled':'')+(v>state.goal?' over':'');
-    if(fmt(d)===current)bar.classList.add('today-bar');
-    bar.style.height=Math.max(3,Math.round(v/max*72))+'px';
-    bar.title=new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'numeric'}).format(d)+' — '+v+' קק"ל';
-    const lbl=document.createElement('div'); lbl.className='lbl';
-    lbl.textContent=(i===0||i===N-1||i%7===0)?d.getDate():'';
-    col.append(val,bar,lbl); box.appendChild(col);
+  const letters=['א','ב','ג','ד','ה','ו','ש'];
+  let html=letters.map(l=>'<div class="mg-head">'+l+'</div>').join('');
+  const lead=days[0].getDay();
+  for(let i=0;i<lead;i++)html+='<div class="mg-cell blank"></div>';
+  days.forEach(d=>{
+    const k=fmt(d), v=Math.round(dayKcal(k));
+    const cls=v===0?'empty':(v>state.goal?'over':'ok');
+    const today=k===current?' today':'';
+    const t=new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'numeric'}).format(d)+' — '+v+' קק"ל';
+    html+='<div class="mg-cell '+cls+today+'" title="'+t+'">'+
+      '<div class="mg-date">'+d.getDate()+'</div>'+
+      '<div class="mg-val">'+(v?v.toLocaleString('he-IL'):'–')+'</div></div>';
   });
-  $('weekNote').textContent='היעד היומי: '+state.goal.toLocaleString('he-IL')+' קק"ל · עמודה אדומה = חריגה מהיעד';
+  box.innerHTML=html;
+  $('weekNote').textContent='היעד היומי: '+state.goal.toLocaleString('he-IL')+' קק"ל · ירוק = עמדת ביעד · כתום = חריגה';
 }
 
 /* ================= progress card ================= */
