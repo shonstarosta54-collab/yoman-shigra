@@ -1,4 +1,4 @@
-const CACHE = 'yoman-v8';
+const CACHE = 'yoman-v9';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

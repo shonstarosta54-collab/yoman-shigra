@@ -331,6 +331,17 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
 .prog-chart{direction:ltr}
 .prog-chart svg{width:100%; height:auto; display:block}
 .prog-empty{color:var(--muted); font-size:.88rem; padding:10px 0}
+.routine-meter{display:flex; align-items:center; gap:14px; margin-bottom:14px}
+.routine-meter.empty{display:none}
+.routine-ring{position:relative; width:74px; height:74px; flex:none}
+.routine-ring svg{transform:rotate(-90deg)}
+.routine-ring .rm-pct{
+  position:absolute; inset:0; display:grid; place-items:center;
+  font-size:1rem; font-weight:800; color:var(--ink);
+}
+.routine-msg{font-size:.92rem; line-height:1.45}
+.routine-msg .rm-count{color:var(--muted); font-size:.82rem}
+.routine-msg.done .rm-title{color:var(--accent)}
 .jhist{display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; padding:2px}
 .jhist-row{
   display:block; width:100%; text-align:right; background:var(--card); border:1px solid var(--line);
@@ -498,6 +509,7 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
 
   <section class="card">
     <h2>✅ שגרה יומית <span class="hint" id="habitsProgress"></span></h2>
+    <div id="routineMeter" class="routine-meter"></div>
     <div id="habitsContainer"></div>
     <div class="habit-add-row">
       <input type="text" id="newHabit" placeholder="הוספת הרגל חדש… (למשל: 8 כוסות מים)" maxlength="60">
@@ -1082,6 +1094,27 @@ function renderHabits(){
   }
   if(!state.habits.length){box.innerHTML='<div class="empty-meal">אין הרגלים עדיין — הוסיפו אחד למטה</div>';}
   $('habitsProgress').textContent=state.habits.length?done+' / '+state.habits.length+' הושלמו':'';
+  renderRoutineMeter(done,state.habits.length);
+}
+
+function renderRoutineMeter(done,total){
+  const box=$('routineMeter');
+  if(!total){box.className='routine-meter empty'; box.innerHTML=''; return;}
+  box.className='routine-meter';
+  const pct=Math.round(done/total*100);
+  const all=done===total;
+  const r=32, C=2*Math.PI*r, off=C*(1-done/total);
+  const col=all?'var(--accent)':'var(--accent)';
+  const ring='<div class="routine-ring"><svg viewBox="0 0 74 74" width="74" height="74">'+
+    '<circle cx="37" cy="37" r="'+r+'" fill="none" stroke="var(--line)" stroke-width="7"/>'+
+    '<circle cx="37" cy="37" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"'+
+    ' stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'"'+
+    (all?' style="filter:drop-shadow(0 0 5px rgba(61,232,176,.6))"':'')+'/></svg>'+
+    '<div class="rm-pct">'+pct+'%</div></div>';
+  let title,sub;
+  if(all){title='כל הכבוד! השלמת את כל השגרה היומית 🎉'; sub=done+' מתוך '+total+' הרגלים';}
+  else{const left=total-done; title=done===0?'עדיין לא התחלת את השגרה של היום':'עוד '+left+' ל'+'השלמת השגרה'; sub=done+' מתוך '+total+' הרגלים הושלמו';}
+  box.innerHTML=ring+'<div class="routine-msg'+(all?' done':'')+'"><div class="rm-title">'+title+'</div><div class="rm-count">'+sub+'</div></div>';
 }
 
 let journalTimer=null;
