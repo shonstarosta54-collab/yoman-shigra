@@ -141,10 +141,11 @@ header{display:flex; align-items:center; justify-content:space-between; gap:8px;
   background:var(--accent); color:var(--accent-ink);
 }
 .today-chip[disabled]{background:var(--chip); color:var(--muted); cursor:default}
-.day-nav{position:relative}
-.date-pick{
-  position:absolute; inset-inline-end:0; top:100%; width:1px; height:1px;
-  opacity:0; padding:0; border:0; pointer-events:none;
+.cal-wrap{position:relative; overflow:hidden; padding:0}
+.cal-wrap input{
+  position:absolute; inset:0; width:100%; height:100%;
+  opacity:0; margin:0; padding:0; border:0; cursor:pointer;
+  -webkit-appearance:none; appearance:none;
 }
 
 /* On phones, put the day switcher on its own row below the title, with bigger tap targets */
@@ -444,11 +445,12 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
     <div class="brand">היומן שלי · שגרה יומית</div>
     <div class="day-nav">
       <button class="nav-btn" id="profileBtn" title="הפרופיל שלי">👤</button>
-      <button class="nav-btn" id="calBtn" title="בחירת תאריך">📅</button>
+      <label class="nav-btn cal-wrap" title="בחירת תאריך">📅
+        <input type="date" id="datePick" aria-label="בחירת תאריך">
+      </label>
       <button class="nav-btn" id="nextDay" title="יום קדימה">&#8250;</button>
       <button class="today-chip" id="goToday">היום</button>
       <button class="nav-btn" id="prevDay" title="יום אחורה">&#8249;</button>
-      <input type="date" id="datePick" class="date-pick" aria-label="בחירת תאריך">
     </div>
   </header>
 
@@ -859,6 +861,7 @@ function render(){
   $('dateSub').textContent=(isToday?'היום · ':'')+new Intl.DateTimeFormat('he-IL',{year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
   $('goToday').disabled=isToday;
   $('nextDay').style.visibility=isToday?'hidden':'visible';
+  const dp=$('datePick'); if(dp){dp.value=current; dp.max=todayStr();}
   renderSummary(); renderMeals(); renderWorkout(); renderHabits(); renderJournal(); renderWeek(); renderProgress();
 }
 
@@ -1446,12 +1449,6 @@ $('prevDay').onclick=()=>shiftDay(-1);
 $('nextDay').onclick=()=>shiftDay(1);
 $('goToday').onclick=()=>{current=todayStr();render();};
 $('profileBtn').onclick=openProfileModal;
-$('calBtn').onclick=()=>{
-  const dp=$('datePick');
-  dp.value=current; dp.max=todayStr();
-  if(dp.showPicker){try{dp.showPicker();return;}catch(e){}}
-  dp.focus(); dp.click();
-};
 $('datePick').onchange=e=>{ if(e.target.value){ current=e.target.value; render(); } };
 $('addHabitBtn').onclick=()=>{
   const inp=$('newHabit'), v=inp.value.trim();
