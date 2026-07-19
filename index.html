@@ -828,6 +828,9 @@ function load(){
   if(!s)s={goal:2000, habits:DEFAULT_HABITS.map((n,i)=>({id:'h'+i,name:n})), days:{}};
   if(!('profile' in s))s.profile=null;
   if(!Array.isArray(s.weightLog))s.weightLog=[];
+  if(!Array.isArray(s.habits))s.habits=DEFAULT_HABITS.map((n,i)=>({id:'h'+i,name:n}));
+  if(!s.days||typeof s.days!=='object')s.days={};
+  if(typeof s.goal!=='number')s.goal=2000;
   return s;
 }
 function save(){
