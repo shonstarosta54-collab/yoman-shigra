@@ -326,6 +326,11 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
 .week .lbl{font-size:.72rem; color:var(--muted)}
 .week .val{font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums}
 .goal-line-note{font-size:.75rem; color:var(--muted); margin-top:8px}
+.routine-week-wrap{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
+.routine-week-wrap.empty{display:none}
+.routine-week-title{font-size:.82rem; font-weight:700; color:var(--muted); margin-bottom:6px}
+.week .bar.rt-full{background:linear-gradient(180deg, var(--accent), #17654B)}
+.week .bar.rt-part{background:var(--accent-soft)}
 
 /* ---------- progress ---------- */
 .prog-chart{direction:ltr}
@@ -511,6 +516,11 @@ textarea.journal{width:100%; min-height:110px; resize:vertical; line-height:1.6}
     <h2>✅ שגרה יומית <span class="hint" id="habitsProgress"></span></h2>
     <div id="routineMeter" class="routine-meter"></div>
     <div id="habitsContainer"></div>
+    <div class="routine-week-wrap" id="routineWeekWrap">
+      <div class="routine-week-title">📅 ההתקדמות שלי ב‑7 הימים האחרונים</div>
+      <div class="week" id="routineWeek"></div>
+      <div class="goal-line-note" id="routineWeekNote"></div>
+    </div>
     <div class="habit-add-row">
       <input type="text" id="newHabit" placeholder="הוספת הרגל חדש… (למשל: 8 כוסות מים)" maxlength="60">
       <button class="btn ghost" id="addHabitBtn">הוספה</button>
@@ -1095,6 +1105,38 @@ function renderHabits(){
   if(!state.habits.length){box.innerHTML='<div class="empty-meal">אין הרגלים עדיין — הוסיפו אחד למטה</div>';}
   $('habitsProgress').textContent=state.habits.length?done+' / '+state.habits.length+' הושלמו':'';
   renderRoutineMeter(done,state.habits.length);
+  renderRoutineWeek();
+}
+
+function habitDoneCount(k){
+  const dd=state.days[k]; if(!dd||!dd.checks)return 0;
+  return state.habits.reduce((n,h)=>n+(dd.checks[h.id]?1:0),0);
+}
+
+function renderRoutineWeek(){
+  const wrap=$('routineWeekWrap'), box=$('routineWeek'), note=$('routineWeekNote');
+  const total=state.habits.length;
+  if(!total){wrap.className='routine-week-wrap empty'; return;}
+  wrap.className='routine-week-wrap';
+  box.innerHTML='';
+  const days=[]; const base=new Date(current+'T12:00:00');
+  for(let i=6;i>=0;i--){const d=new Date(base);d.setDate(d.getDate()-i);days.push(d);}
+  const letters=['א','ב','ג','ד','ה','ו','ש'];
+  let fullDays=0;
+  days.forEach(d=>{
+    const k=fmt(d), done=habitDoneCount(k), pct=Math.round(done/total*100);
+    if(done===total)fullDays++;
+    const col=document.createElement('div'); col.className='col';
+    const val=document.createElement('div'); val.className='val'; val.textContent=done?pct+'%':'';
+    const bar=document.createElement('div');
+    bar.className='bar'+(done===total?' rt-full':(done?' rt-part':''));
+    if(k===current)bar.classList.add('today-bar');
+    bar.style.height=Math.max(3,Math.round(pct/100*72))+'px';
+    bar.title=new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'numeric'}).format(d)+' — '+done+'/'+total+' הרגלים';
+    const lbl=document.createElement('div'); lbl.className='lbl'; lbl.textContent=letters[d.getDay()];
+    col.append(val,bar,lbl); box.appendChild(col);
+  });
+  note.textContent='ימים ירוקים = השלמת את כל השגרה · השלמת הכל ב‑'+fullDays+' מתוך 7 הימים';
 }
 
 function renderRoutineMeter(done,total){
