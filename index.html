@@ -128,7 +128,7 @@ input,textarea,select{
 input::placeholder,textarea::placeholder{color:var(--muted)}
 
 /* ---------- header ---------- */
-header{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0 12px}
+header{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0 12px; flex-wrap:wrap}
 .brand{font-size:.8rem; font-weight:700; color:var(--muted); letter-spacing:.05em}
 .day-nav{display:flex; align-items:center; gap:6px}
 .nav-btn{
@@ -141,6 +141,15 @@ header{display:flex; align-items:center; justify-content:space-between; gap:8px;
   background:var(--accent); color:var(--accent-ink);
 }
 .today-chip[disabled]{background:var(--chip); color:var(--muted); cursor:default}
+
+/* On phones, put the day switcher on its own row below the title, with bigger tap targets */
+@media(max-width:560px){
+  header{flex-direction:column; align-items:stretch; gap:10px}
+  .brand{text-align:center}
+  .day-nav{justify-content:center; gap:10px}
+  .nav-btn{width:46px; height:46px; font-size:1.3rem}
+  .today-chip{font-size:.95rem; padding:10px 20px}
+}
 
 /* ---------- hero ---------- */
 .hero{
