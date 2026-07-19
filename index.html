@@ -468,6 +468,7 @@ button.hchip:hover{background:rgba(255,255,255,.22)}
       <label class="nav-btn cal-wrap" title="בחירת תאריך">📅
         <input type="date" id="datePick" aria-label="בחירת תאריך">
       </label>
+      <button class="nav-btn" id="resetDayBtn" title="איפוס היום הנבחר">🗑️</button>
       <button class="nav-btn" id="nextDay" title="יום קדימה">&#8250;</button>
       <button class="today-chip" id="goToday">היום</button>
       <button class="nav-btn" id="prevDay" title="יום אחורה">&#8249;</button>
@@ -1522,6 +1523,19 @@ $('nextDay').onclick=()=>shiftDay(1);
 $('goToday').onclick=()=>{current=todayStr();render();};
 $('profileBtn').onclick=openProfileModal;
 $('datePick').onchange=e=>{ if(e.target.value){ current=e.target.value; render(); } };
+$('resetDayBtn').onclick=function(){
+  const b=this;
+  if(b.dataset.arm){
+    delete b.dataset.arm; b.classList.remove('confirming'); b.textContent='🗑️';
+    delete state.days[current];
+    state.weightLog=state.weightLog.filter(e=>e.d!==current);
+    save(); render();
+    toast('הנתונים של '+heDate(current)+' אופסו');
+    return;
+  }
+  b.dataset.arm='1'; b.classList.add('confirming'); b.textContent='למחוק?';
+  setTimeout(()=>{if(b.isConnected&&b.dataset.arm){delete b.dataset.arm;b.classList.remove('confirming');b.textContent='🗑️';}},3000);
+};
 $('addHabitBtn').onclick=()=>{
   const inp=$('newHabit'), v=inp.value.trim();
   if(!v)return;
