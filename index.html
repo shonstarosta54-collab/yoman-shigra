@@ -578,6 +578,7 @@ input:focus, textarea:focus, select:focus{ border-color:var(--accent); box-shado
     <button id="exportBtn">גיבוי הנתונים (JSON)</button>
     <label>שחזור מגיבוי<input type="file" id="importFile" accept=".json" hidden></label>
     <button id="syncBtn">👤 התחברות עם Google</button>
+    <button id="aiKeyBtn">🔮 זיהוי אוכל AI</button>
     <button id="resetBtn">🔄 איפוס והתחלה מחדש</button>
   </div>
 </div>
@@ -1405,7 +1406,7 @@ function closeProfile(){if(pmodal){pmodal.remove();pmodal=null;}}
 let modal=null, pendingPhoto=null, selFood=null, selMeal='breakfast', manualMode=false;
 
 function openFoodModal(mealKey){
-  selMeal=mealKey; pendingPhoto=null; selFood=null; manualMode=false;
+  selMeal=mealKey; pendingPhoto=null; selFood=null; manualMode=false; aiEstimated=false;
   modal=document.createElement('div'); modal.className='overlay';
   modal.onclick=e=>{if(e.target===modal)closeModal();};
   const sheet=document.createElement('div'); sheet.className='sheet';
@@ -1416,7 +1417,7 @@ function openFoodModal(mealKey){
     <div class="photo-row">
       <img class="photo-preview" id="photoPreview" alt="" style="display:none">
       <div class="photo-preview" id="photoPh" style="display:grid;place-items:center;font-size:1.6rem">📷</div>
-      <button class="photo-btn" id="takePhoto">📷 צילום המנה</button>
+      <button class="photo-btn" id="takePhoto">📷 צילום המנה + זיהוי AI</button>
     </div>
     <div class="search-box"><input type="text" id="foodSearch" placeholder="חיפוש מאכל… (למשל: פיתה, קוטג', בננה)" autocomplete="off"></div>
     <div class="results" id="results" style="display:none"></div>
@@ -1507,7 +1508,7 @@ function saveEntry(){
   let entry;
   if(manualMode){
     entry={id:Date.now()+''+Math.random().toString(36).slice(2,6),meal:selMeal,
-      name:$('manName').value.trim(),desc:'הזנה ידנית',kcal:+$('manKcal').value,photo:pendingPhoto};
+      name:$('manName').value.trim(),desc:aiEstimated?'הערכת AI 📷':'הזנה ידנית',kcal:+$('manKcal').value,photo:pendingPhoto};
   }else{
     const [name,per100,unitName,unitG]=selFood;
     const q=parseFloat($('qty').value)||0;
@@ -1518,6 +1519,37 @@ function saveEntry(){
       kcal:grams*per100/100,photo:pendingPhoto};
   }
   dd.meals.push(entry); save(); closeModal(); render();
+}
+
+/* ---- AI food recognition (Google Gemini vision) ---- */
+/* key is NOT stored in the public code — it lives in the user's own state
+   (synced privately via Firebase) and a localStorage mirror. */
+const AIKEY_LS='shigra-ai-key';
+let aiEstimated=false;
+function geminiKey(){ return (state.aiKey||localStorage.getItem(AIKEY_LS)||'').trim(); }
+function setGeminiKey(k){
+  k=(k||'').trim();
+  state.aiKey=k||undefined;
+  if(k)localStorage.setItem(AIKEY_LS,k); else localStorage.removeItem(AIKEY_LS);
+  save();
+}
+async function aiEstimatePhoto(dataURI){
+  const base64=(dataURI.split(',')[1])||'';
+  const prompt='אתה עוזר תזונה. הסתכל על תמונת האוכל והערך את סך הקלוריות של המנה שרואים בתמונה, לפי הכמות שנראית. '+
+    'החזר JSON בלבד בפורמט המדויק: {"name": "שם המאכל בעברית", "kcal": מספר_שלם}. '+
+    'אם זו אינה תמונת אוכל, החזר {"name": "", "kcal": 0}.';
+  const body={
+    contents:[{parts:[{text:prompt},{inline_data:{mime_type:'image/jpeg',data:base64}}]}],
+    generationConfig:{responseMimeType:'application/json',temperature:0.2}
+  };
+  const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+encodeURIComponent(geminiKey());
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('gemini '+r.status);
+  const j=await r.json();
+  const txt=(((j.candidates||[])[0]||{}).content||{}).parts||[];
+  const raw=(txt[0]||{}).text||'';
+  const parsed=JSON.parse(raw);
+  return {name:(parsed.name||'').trim(), kcal:Math.round(+parsed.kcal||0)};
 }
 
 /* photo capture + compression */
@@ -1537,10 +1569,65 @@ $('photoInput').addEventListener('change',e=>{
       const pv=$('photoPreview');pv.src=pendingPhoto;pv.style.display='block';pv.alt='תמונת המנה';
       $('photoPh').style.display='none';
       $('takePhoto').textContent='📷 צילום מחדש';
+      runPhotoAI();
     }
   };
   img.src=URL.createObjectURL(file);
 });
+
+async function runPhotoAI(){
+  if(!pendingPhoto)return;
+  if(!geminiKey()){ openAiKeyModal(); return; }
+  if(!navigator.onLine){ toast('אין חיבור לאינטרנט — הזינו ידנית'); return; }
+  const btn=$('takePhoto'); const prev=btn.textContent;
+  btn.textContent='🔮 מנתח את המנה…'; btn.disabled=true;
+  try{
+    const res=await aiEstimatePhoto(pendingPhoto);
+    if(!modal){return;}
+    if(res.name&&res.kcal>0){
+      manualMode=true; selFood=null; showPortion();
+      const nEl=$('manName'), kEl=$('manKcal');
+      if(nEl&&kEl){
+        nEl.value=res.name; kEl.value=res.kcal; aiEstimated=true;
+        $('saveEntry').disabled=false;
+      }
+      toast('🔮 הערכת AI: '+res.name+' ≈ '+res.kcal+' קק"ל — אפשר לתקן');
+    }else{
+      toast('לא זוהה אוכל בתמונה — אפשר להזין ידנית');
+    }
+  }catch(err){
+    toast('לא הצלחתי לנתח את התמונה — אפשר להזין ידנית');
+  }finally{
+    if(modal){btn.textContent=prev; btn.disabled=false;}
+  }
+}
+
+function openAiKeyModal(){
+  const ov=document.createElement('div'); ov.className='overlay';
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  const sh=document.createElement('div'); sh.className='sheet';
+  const has=!!geminiKey();
+  sh.innerHTML='<button class="sheet-close">✕</button><h3>🔮 זיהוי אוכל אוטומטי</h3>'+
+    '<p style="color:var(--muted);font-size:.92rem;line-height:1.8">כשמצלמים מנה, ה־AI מזהה את המאכל ומעריך קלוריות אוטומטית. '+
+    'צריך מפתח חינמי של Google Gemini (חד־פעמי):</p>'+
+    '<p style="font-size:.9rem;line-height:1.8">1. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">לחצו כאן לקבלת מפתח</a> → "Create API key"<br>'+
+    '2. העתיקו את המפתח והדביקו כאן:</p>'+
+    '<input type="password" id="aiKeyInput" placeholder="הדביקו כאן את המפתח…" style="width:100%;direction:ltr;margin:10px 0" autocomplete="off" value="'+(has?geminiKey():'')+'">'+
+    '<p style="color:var(--muted);font-size:.78rem">המפתח נשמר רק בחשבון הפרטי שלך ומסתנכרן למכשירים שלך.</p>'+
+    '<div class="actions"><button class="btn" id="aiKeySave">שמירה</button>'+
+    (has?'<button class="btn ghost" id="aiKeyClear">הסרה</button>':'<button class="btn ghost" id="aiKeyCancel">ביטול</button>')+'</div>';
+  ov.appendChild(sh); document.body.appendChild(ov);
+  sh.querySelector('.sheet-close').onclick=()=>ov.remove();
+  const cancel=$('aiKeyCancel'); if(cancel)cancel.onclick=()=>ov.remove();
+  const clr=$('aiKeyClear'); if(clr)clr.onclick=()=>{setGeminiKey('');ov.remove();toast('זיהוי ה־AI כובה');};
+  $('aiKeySave').onclick=()=>{
+    const k=$('aiKeyInput').value.trim();
+    if(!k){toast('הדביקו קודם את המפתח');return;}
+    setGeminiKey(k); ov.remove();
+    toast('נשמר! צלמו מנה כדי לזהות אוטומטית 🔮');
+    if(pendingPhoto&&modal)runPhotoAI();
+  };
+}
 
 /* photo viewer */
 function openPhoto(src,name){
@@ -1725,6 +1812,7 @@ function openSyncModal(){
   $('syncOff').onclick=()=>{ov.remove(); fbAuth.signOut().then(()=>{toast('התנתקת — הנתונים נשארים במכשיר'); setSyncStatus();});};
 }
 $('syncBtn').onclick=()=>{ if(fbUser)openSyncModal(); else signIn(); };
+$('aiKeyBtn').onclick=openAiKeyModal;
 window.addEventListener('focus',()=>{if(fbUser)pullCloud();});
 
 /* ================= welcome screen =================
